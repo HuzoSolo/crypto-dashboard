@@ -1,23 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { getCalendarEvents, createCalendarEvent, type ApiCalendarEvent } from "@/lib/api";
 
 const MONTH_NAMES = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 const DOW = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 
+const NOW = new Date();
+
 export default function CalendarPage() {
   const trades = useStore((s) => s.trades);
-  const [month, setMonth] = useState(4);
-  const year = 2026;
-  const today = 5;
+  const [month, setMonth] = useState(NOW.getMonth());
+  const [year, setYear] = useState(NOW.getFullYear());
+  const today = NOW.getDate();
+
+  const [apiEvents, setApiEvents] = useState<ApiCalendarEvent[]>([]);
+  const [showNew, setShowNew] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [newForm, setNewForm] = useState({ title: "", date: "", description: "" });
+  const [picked, setPicked] = useState<number | null>(null);
+
+  useEffect(() => {
+    const from = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const to = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    getCalendarEvents(from, to).then((d) => setApiEvents(d.events)).catch(() => {});
+  }, [month, year]);
 
   const firstDay = new Date(year, month, 1);
   const startWeekday = (firstDay.getDay() + 6) % 7;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const events: Record<number, { type: string; label: string; qty?: number }[]> = {};
+
   trades.forEach((t) => {
     const d = new Date(t.date);
     if (d.getFullYear() === year && d.getMonth() === month) {
@@ -26,17 +43,36 @@ export default function CalendarPage() {
       events[day].push({ type: t.type, label: `${t.type === "buy" ? "Alış" : "Satış"} ${t.coin}`, qty: t.qty });
     }
   });
-  events[8] = (events[8] || []).concat([{ type: "note", label: "BTC ETF kararı" }]);
-  events[14] = (events[14] || []).concat([{ type: "note", label: "CPI verisi" }]);
-  events[20] = (events[20] || []).concat([{ type: "note", label: "FOMC tutanak" }]);
+
+  apiEvents.forEach((ev) => {
+    if (ev.type === "MANUAL") {
+      const d = new Date(ev.date);
+      const day = d.getDate();
+      events[day] = events[day] || [];
+      events[day].push({ type: "note", label: ev.title });
+    }
+  });
 
   const cells: (number | null)[] = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7) cells.push(null);
 
-  const [picked, setPicked] = useState<number | null>(null);
-  const [showNew, setShowNew] = useState(false);
+  const handleSaveEvent = async () => {
+    if (!newForm.title || !newForm.date) return;
+    setSaving(true);
+    try {
+      await createCalendarEvent({ title: newForm.title, date: new Date(newForm.date).toISOString(), description: newForm.description || undefined });
+      setShowNew(false);
+      setNewForm({ title: "", date: "", description: "" });
+      const from = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const to = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      getCalendarEvents(from, to).then((d) => setApiEvents(d.events)).catch(() => {});
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="animate-fadeIn" style={{ padding: "20px 24px 40px", display: "flex", flexDirection: "column", gap: 18 }}>
@@ -50,16 +86,31 @@ export default function CalendarPage() {
       {/* Toolbar */}
       <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-soft)", borderRadius: 14, padding: 14 }}>
         <div className="flex items-center gap-[8px] flex-wrap">
-          <button onClick={() => setMonth((m) => (m + 11) % 12)} style={iconBtnStyle}>
+          <button
+            onClick={() => {
+              if (month === 0) { setMonth(11); setYear((y) => y - 1); }
+              else setMonth((m) => m - 1);
+            }}
+            style={iconBtnStyle}
+          >
             <ChevronLeft size={14} />
           </button>
           <div style={{ minWidth: 140, textAlign: "center", fontWeight: 600, fontSize: 14 }}>
             {MONTH_NAMES[month]} {year}
           </div>
-          <button onClick={() => setMonth((m) => (m + 1) % 12)} style={iconBtnStyle}>
+          <button
+            onClick={() => {
+              if (month === 11) { setMonth(0); setYear((y) => y + 1); }
+              else setMonth((m) => m + 1);
+            }}
+            style={iconBtnStyle}
+          >
             <ChevronRight size={14} />
           </button>
-          <button onClick={() => setMonth(4)} style={{ ...btnStyle, padding: "5px 10px", fontSize: 12 }}>
+          <button
+            onClick={() => { setMonth(NOW.getMonth()); setYear(NOW.getFullYear()); }}
+            style={{ ...btnStyle, padding: "5px 10px", fontSize: 12 }}
+          >
             Bugün
           </button>
           <span style={{ flex: 1 }} />
@@ -113,7 +164,7 @@ export default function CalendarPage() {
         ))}
         {cells.map((d, i) => {
           const dayEvents = d != null ? (events[d] || []) : [];
-          const isToday = d === today && month === 4;
+          const isToday = d === today && month === NOW.getMonth() && year === NOW.getFullYear();
           return (
             <div
               key={i}
@@ -136,17 +187,7 @@ export default function CalendarPage() {
                   className="mono"
                   style={
                     isToday
-                      ? {
-                          fontSize: 11,
-                          background: "var(--accent-color)",
-                          color: "#fff",
-                          width: 22,
-                          height: 22,
-                          borderRadius: "50%",
-                          display: "grid",
-                          placeItems: "center",
-                          fontWeight: 600,
-                        }
+                      ? { fontSize: 11, background: "var(--accent-color)", color: "#fff", width: 22, height: 22, borderRadius: "50%", display: "grid", placeItems: "center", fontWeight: 600 }
                       : { fontSize: 11, color: "var(--text-dim)" }
                   }
                 >
@@ -217,7 +258,15 @@ export default function CalendarPage() {
                 <div style={{ color: "var(--text-mute)", fontSize: 13, padding: 12 }}>Bu güne ait kayıt yok.</div>
               )}
             </div>
-            <button style={{ marginTop: 12, width: "100%", padding: "9px", borderRadius: 8, border: "1px solid var(--accent-color)", background: "var(--accent-color)", color: "#fff", fontSize: 13, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <button
+              onClick={() => {
+                const pad = (n: number) => String(n).padStart(2, "0");
+                setNewForm({ title: "", date: `${year}-${pad(month + 1)}-${pad(picked)}`, description: "" });
+                setPicked(null);
+                setShowNew(true);
+              }}
+              style={{ marginTop: 12, width: "100%", padding: "9px", borderRadius: 8, border: "1px solid var(--accent-color)", background: "var(--accent-color)", color: "#fff", fontSize: 13, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+            >
               <Plus size={13} />Bu güne etkinlik ekle
             </button>
           </div>
@@ -228,29 +277,54 @@ export default function CalendarPage() {
       {showNew && (
         <ModalBackdrop onClose={() => setShowNew(false)}>
           <div>
-            <h2 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 600 }}>Yeni Etkinlik</h2>
-            <div style={{ fontSize: 12, color: "var(--text-mute)", marginBottom: 16 }}>Hatırlatma, haber veya not ekle</div>
+            <div className="flex justify-between items-start" style={{ marginBottom: 4 }}>
+              <div>
+                <h2 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 600 }}>Yeni Etkinlik</h2>
+                <div style={{ fontSize: 12, color: "var(--text-mute)", marginBottom: 16 }}>Hatırlatma, haber veya not ekle</div>
+              </div>
+              <button onClick={() => setShowNew(false)} style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: 6 }}>
+                <X size={16} />
+              </button>
+            </div>
             <Field label="Başlık">
-              <input className="field-input" placeholder="Örn: BTC halving" />
+              <input
+                className="field-input"
+                placeholder="Örn: BTC halving"
+                value={newForm.title}
+                onChange={(e) => setNewForm({ ...newForm, title: e.target.value })}
+              />
             </Field>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+            <div style={{ marginTop: 12 }}>
               <Field label="Tarih">
-                <input className="field-input" type="date" defaultValue="2026-05-15" />
-              </Field>
-              <Field label="Kategori">
-                <select className="field-input">
-                  <option>Haber</option><option>Hatırlatma</option><option>Etkinlik</option>
-                </select>
+                <input
+                  className="field-input"
+                  type="date"
+                  value={newForm.date}
+                  onChange={(e) => setNewForm({ ...newForm, date: e.target.value })}
+                />
               </Field>
             </div>
             <div style={{ marginTop: 12, marginBottom: 16 }}>
               <Field label="Notlar">
-                <textarea className="field-input" rows={3} style={{ resize: "none" }} />
+                <textarea
+                  className="field-input"
+                  rows={3}
+                  style={{ resize: "none" }}
+                  value={newForm.description}
+                  onChange={(e) => setNewForm({ ...newForm, description: e.target.value })}
+                  placeholder="Strateji, not, hatırlatma…"
+                />
               </Field>
             </div>
             <div className="flex gap-[8px]">
               <button onClick={() => setShowNew(false)} style={{ flex: 1, padding: "9px", borderRadius: 8, border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text)", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>İptal</button>
-              <button onClick={() => setShowNew(false)} style={{ flex: 1, padding: "9px", borderRadius: 8, border: "1px solid var(--accent-color)", background: "var(--accent-color)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Kaydet</button>
+              <button
+                onClick={handleSaveEvent}
+                disabled={saving || !newForm.title || !newForm.date}
+                style={{ flex: 1, padding: "9px", borderRadius: 8, border: "1px solid var(--accent-color)", background: "var(--accent-color)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.7 : 1 }}
+              >
+                {saving ? "Kaydediliyor…" : "Kaydet"}
+              </button>
             </div>
           </div>
         </ModalBackdrop>

@@ -1,25 +1,28 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useStore } from "@/lib/store";
-import { INITIAL_PRICES } from "@/lib/data";
 
-export function usePriceFeed(intervalMs = 1800) {
-  const setPrices = useStore((s) => s.setPrices);
+export function usePriceFeed(intervalMs = 15000) {
+  const watchlistItems = useStore((s) => s.watchlistItems);
+  const holdings = useStore((s) => s.holdings);
+  const fetchPricesForSymbols = useStore((s) => s.fetchPricesForSymbols);
+
+  const symbols = useMemo(() => {
+    const set = new Set([
+      ...watchlistItems.map((w) => w.symbol),
+      ...holdings.map((h) => h.sym),
+    ]);
+    return [...set];
+  }, [watchlistItems, holdings]);
+
+  const symbolsKey = symbols.sort().join(",");
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setPrices(
-        Object.fromEntries(
-          Object.entries(useStore.getState().prices).map(([k, v]) => {
-            const drift = (Math.random() - 0.5) * 2 * 0.0015;
-            return [k, Math.max(0.0001, v * (1 + drift))];
-          })
-        )
-      );
-    }, intervalMs);
+    if (symbols.length === 0) return;
+    fetchPricesForSymbols(symbols);
+    const id = setInterval(() => fetchPricesForSymbols(symbols), intervalMs);
     return () => clearInterval(id);
-  }, [intervalMs, setPrices]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbolsKey, intervalMs]);
 }
-
-export { INITIAL_PRICES };

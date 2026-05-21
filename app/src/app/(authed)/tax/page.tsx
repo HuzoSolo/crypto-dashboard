@@ -1,19 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Download } from "lucide-react";
-import { useStore } from "@/lib/store";
+import { getTax, updateTaxRate, exportTaxCSV, type ApiTaxResponse } from "@/lib/api";
 import { Coin } from "@/components/crypto/coin";
 import { Delta } from "@/components/crypto/delta";
 
 export default function TaxPage() {
-  const lots = useStore((s) => s.taxLots);
+  const [taxData, setTaxData] = useState<ApiTaxResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [year, setYear] = useState(new Date().getFullYear());
   const [rate, setRate] = useState(20);
+  const [rateTimeout, setRateTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
-  const realized = lots.reduce((s, l) => s + l.pnl, 0);
-  const taxable = lots.filter((l) => l.pnl > 0).reduce((s, l) => s + l.pnl, 0);
-  const tax = (taxable * rate) / 100;
-  const losses = lots.filter((l) => l.pnl < 0).reduce((s, l) => s + l.pnl, 0);
+  const load = async (y = year) => {
+    setLoading(true);
+    try {
+      const data = await getTax(y);
+      setTaxData(data);
+      setRate(data.taxRate);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [year]);
+
+  const handleRateChange = (newRate: number) => {
+    setRate(newRate);
+    if (rateTimeout) clearTimeout(rateTimeout);
+    const t = setTimeout(async () => {
+      await updateTaxRate(newRate);
+      load();
+    }, 600);
+    setRateTimeout(t);
+  };
+
+  const lots = taxData?.lots ?? [];
+  const realized = taxData?.netPnl ?? 0;
+  const taxable = taxData?.totalGain ?? 0;
+  const tax = taxData?.estimatedTax ?? 0;
+  const losses = taxData?.totalLoss ?? 0;
 
   return (
     <div className="animate-fadeIn" style={{ padding: "20px 24px 40px", display: "flex", flexDirection: "column", gap: 18 }}>
@@ -57,7 +84,7 @@ export default function TaxPage() {
               max="50"
               step="1"
               value={rate}
-              onChange={(e) => setRate(parseInt(e.target.value))}
+              onChange={(e) => handleRateChange(parseInt(e.target.value))}
               style={{ flex: 1, accentColor: "#fff" }}
             />
             <span className="mono" style={{ fontWeight: 600 }}>%{rate}</span>
@@ -75,10 +102,18 @@ export default function TaxPage() {
             İlk giren ilk çıkar yöntemi · {lots.length} satılmış lot
           </span>
           <span style={{ flex: 1 }} />
-          <select style={{ padding: "6px 10px", background: "var(--bg-card)", border: "1px solid var(--border-soft)", borderRadius: 8, color: "var(--text)", fontSize: 12, outline: "none", fontFamily: "inherit" }}>
-            <option>2026</option><option>2025</option>
+          <select
+            value={year}
+            onChange={(e) => setYear(parseInt(e.target.value))}
+            style={{ padding: "6px 10px", background: "var(--bg-card)", border: "1px solid var(--border-soft)", borderRadius: 8, color: "var(--text)", fontSize: 12, outline: "none", fontFamily: "inherit" }}
+          >
+            <option value={2026}>2026</option>
+            <option value={2025}>2025</option>
           </select>
-          <button style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 500, border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text)", cursor: "pointer", fontFamily: "inherit" }}>
+          <button
+            onClick={() => exportTaxCSV(year)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 500, border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text)", cursor: "pointer", fontFamily: "inherit" }}
+          >
             <Download size={13} />CSV İndir
           </button>
         </div>
@@ -103,13 +138,13 @@ export default function TaxPage() {
                   onMouseLeave={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = "")}
                 >
                   <td className="mono" style={{ padding: "12px", color: "var(--text-dim)" }}>{l.date}</td>
-                  <td style={{ padding: "12px" }}><Coin sym={l.coin} /></td>
-                  <td className="mono" style={{ textAlign: "right", padding: "12px" }}>{l.qty}</td>
+                  <td style={{ padding: "12px" }}><Coin sym={l.symbol} /></td>
+                  <td className="mono" style={{ textAlign: "right", padding: "12px" }}>{l.amount}</td>
                   <td className="mono" style={{ textAlign: "right", padding: "12px" }}>
-                    ${l.buyP.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                    ${l.buyPrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}
                   </td>
                   <td className="mono" style={{ textAlign: "right", padding: "12px" }}>
-                    ${l.sellP.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                    ${l.sellPrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}
                   </td>
                   <td style={{ textAlign: "right", padding: "12px" }}>
                     <Delta value={l.pnl} format="usd" />

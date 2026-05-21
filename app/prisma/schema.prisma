@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  taxRate   Float    @default(20)
+  createdAt DateTime @default(now())
+
+  watchlist WatchlistItem[]
+  portfolio PortfolioAsset[]
+  trades    Trade[]
+  events    CalendarEvent[]
+  goals     Goal[]
+  finances  FinanceEntry[]
+}
+
+model WatchlistItem {
+  id     String @id @default(uuid())
+  userId String
+  symbol String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, symbol])
+}
+
+model PortfolioAsset {
+  id        String   @id @default(uuid())
+  userId    String
+  symbol    String
+  amount    Float
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, symbol])
+}
+
+model Trade {
+  id        String    @id @default(uuid())
+  userId    String
+  symbol    String
+  type      TradeType
+  date      DateTime
+  amount    Float
+  price     Float
+  exchange  String?
+  note      String?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, symbol])
+  @@index([userId, date])
+}
+
+enum TradeType {
+  BUY
+  SELL
+}
+
+model CalendarEvent {
+  id          String    @id @default(uuid())
+  userId      String
+  title       String
+  date        DateTime
+  description String?
+  type        EventType @default(MANUAL)
+  tradeId     String?   @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum EventType {
+  MANUAL
+  TRADE
+}
+
+model Goal {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  targetUSD Float
+  deadline  DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FinanceEntry {
+  id          String      @id @default(uuid())
+  userId      String
+  type        FinanceType
+  category    String
+  amount      Float
+  date        DateTime
+  description String?
+  createdAt   DateTime    @default(now())
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([userId, type])
+}
+
+enum FinanceType {
+  INCOME
+  EXPENSE
+}

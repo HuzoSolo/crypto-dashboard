@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { ArrowRight, BarChart3 } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { getFinance } from "@/lib/api";
 import { Sparkline } from "@/components/crypto/sparkline";
 import { DonutChart } from "@/components/crypto/donut-chart";
 import { Delta } from "@/components/crypto/delta";
@@ -18,6 +19,13 @@ export default function DashboardPage() {
   const holdings = useStore((s) => s.holdings);
   const trades = useStore((s) => s.trades);
   const goals = useStore((s) => s.goals);
+  const portfolioMeta = useStore((s) => s.portfolioMeta);
+  const currentUser = useStore((s) => s.currentUser);
+  const [finance, setFinance] = useState({ totalIncome: 0, totalExpense: 0, net: 0 });
+
+  useEffect(() => {
+    getFinance().then((d) => setFinance({ totalIncome: d.totalIncome, totalExpense: d.totalExpense, net: d.net })).catch(() => {});
+  }, []);
 
   const positions = holdings.map((h) => ({
     ...h,
@@ -28,13 +36,13 @@ export default function DashboardPage() {
 
   const totalValue = positions.reduce((s, p) => s + p.value, 0);
   const totalCost = positions.reduce((s, p) => s + p.cost, 0);
-  const change24Pct = 2.34;
-  const change24Usd = totalValue * 0.0234;
+  const change24Pct = portfolioMeta.change24hPct;
+  const change24Usd = portfolioMeta.change24hUSD;
   const allTimePnl = totalValue - totalCost;
-  const allTimePnlPct = (allTimePnl / totalCost) * 100;
-  const monthlyIncome = 6203.8;
-  const monthlyExpense = 2399.0;
-  const net = monthlyIncome - monthlyExpense;
+  const allTimePnlPct = totalCost > 0 ? (allTimePnl / totalCost) * 100 : 0;
+  const monthlyIncome = finance.totalIncome;
+  const monthlyExpense = finance.totalExpense;
+  const net = finance.net;
 
   const donutData = [
     ...positions
@@ -58,7 +66,7 @@ export default function DashboardPage() {
       <div className="flex items-baseline gap-[12px] mb-[4px]">
         <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", margin: 0 }}>Ana Sayfa</h1>
         <span style={{ color: "var(--text-mute)", fontSize: 13 }}>
-          Hoş geldin Emre — bugün portföyün{" "}
+          Hoş geldin {currentUser?.username ?? "…"} — bugün portföyün{" "}
           <Delta value={change24Pct} /> hareketinde.
         </span>
       </div>
@@ -298,7 +306,7 @@ export default function DashboardPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {goals.slice(0, 3).map((g) => {
               const pct = (g.current / g.target) * 100;
-              const isWarn = g.id === "g2";
+              const isWarn = !g.onTrack;
               return (
                 <div key={g.id}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>

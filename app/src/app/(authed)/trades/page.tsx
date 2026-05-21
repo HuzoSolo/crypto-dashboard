@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Download, Plus, Trash2, X } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Coin } from "@/components/crypto/coin";
@@ -9,10 +9,14 @@ import { INITIAL_PRICES } from "@/lib/data";
 
 export default function TradesPage() {
   const trades = useStore((s) => s.trades);
+  const tradesLoading = useStore((s) => s.tradesLoading);
   const addTrade = useStore((s) => s.addTrade);
   const deleteTrade = useStore((s) => s.deleteTrade);
+  const fetchTrades = useStore((s) => s.fetchTrades);
   const [filter, setFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => { fetchTrades(); }, []);
 
   const filtered = trades.filter((t) => filter === "all" || t.type === filter);
   const totalPnl = filtered.reduce((s, t) => s + t.pnl, 0);
@@ -22,7 +26,7 @@ export default function TradesPage() {
       <div className="flex items-baseline gap-[12px] mb-[4px]">
         <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", margin: 0 }}>İşlemler</h1>
         <span style={{ color: "var(--text-mute)", fontSize: 13 }}>
-          {trades.length} işlem · Toplam P&L{" "}
+          {tradesLoading ? "Yükleniyor…" : `${trades.length} işlem`} · Toplam P&L{" "}
           <Delta value={totalPnl} format="usd" size="lg" />
         </span>
       </div>
@@ -143,7 +147,23 @@ export default function TradesPage() {
         </table>
       </div>
 
-      {showForm && <TradeFormModal onClose={() => setShowForm(false)} onSubmit={(t) => { addTrade(t); setShowForm(false); }} />}
+      {showForm && (
+        <TradeFormModal
+          onClose={() => setShowForm(false)}
+          onSubmit={async (data) => {
+            await addTrade({
+              symbol: data.coin,
+              type: data.type === "buy" ? "BUY" : "SELL",
+              date: new Date(data.date).toISOString(),
+              amount: data.qty,
+              price: data.price,
+              exchange: data.exchange,
+              note: data.note,
+            });
+            setShowForm(false);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,7 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { LayoutGrid, Search, RefreshCw, Bell, Sun, Moon, Settings, Check, ChevronDown } from "lucide-react";
+import { LayoutGrid, Search, RefreshCw, Bell, Sun, Moon, Settings, LogOut, ChevronDown } from "lucide-react";
+import { useStore } from "@/lib/store";
+import { authLogout } from "@/lib/api";
 
 interface HeaderProps {
   pageTitle: string;
@@ -9,6 +12,17 @@ interface HeaderProps {
 
 export function Header({ pageTitle }: HeaderProps) {
   const { theme, setTheme } = useTheme();
+  const router = useRouter();
+  const currentUser = useStore((s) => s.currentUser);
+
+  const initials = currentUser
+    ? currentUser.username.slice(0, 2).toUpperCase()
+    : "—";
+
+  const handleLogout = async () => {
+    try { await authLogout(); } catch {}
+    router.push("/login");
+  };
 
   return (
     <header
@@ -124,17 +138,18 @@ export function Header({ pageTitle }: HeaderProps) {
               fontSize: 11,
             }}
           >
-            EK
+            {initials}
           </div>
-          <span style={{ fontSize: 13, fontWeight: 500 }}>Emre K.</span>
-          <div
-            className="grid place-items-center rounded-full text-white"
-            style={{ width: 18, height: 18, background: "var(--accent-color)", fontSize: 10 }}
-          >
-            <Check size={10} />
-          </div>
-          <ChevronDown size={12} style={{ color: "var(--text-mute)", marginRight: 4 }} />
+          <span style={{ fontSize: 13, fontWeight: 500 }}>
+            {currentUser ? currentUser.username : "…"}
+          </span>
+          <ChevronDown size={12} style={{ color: "var(--text-mute)" }} />
         </div>
+
+        {/* Logout */}
+        <IconBtn title="Çıkış yap" onClick={handleLogout}>
+          <LogOut size={15} />
+        </IconBtn>
       </div>
     </header>
   );

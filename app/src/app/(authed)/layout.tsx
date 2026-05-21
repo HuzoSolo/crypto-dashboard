@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Header } from "@/components/shell/header";
@@ -18,14 +19,26 @@ const PAGE_TITLES: Record<string, string> = {
 };
 
 export default function AuthedLayout({ children }: { children: React.ReactNode }) {
-  usePriceFeed(1800);
+  const fetchPortfolio = useStore((s) => s.fetchPortfolio);
+  const fetchWatchlist = useStore((s) => s.fetchWatchlist);
+  const fetchCurrentUser = useStore((s) => s.fetchCurrentUser);
+
+  useEffect(() => {
+    fetchCurrentUser();
+    fetchPortfolio();
+    fetchWatchlist();
+  }, []);
+
+  usePriceFeed(15000);
 
   const pathname = usePathname();
   const prices = useStore((s) => s.prices);
   const holdings = useStore((s) => s.holdings);
+  const portfolioMeta = useStore((s) => s.portfolioMeta);
 
-  const totalValue = holdings.reduce((s, h) => s + (prices[h.sym] ?? 0) * h.qty, 0);
-  const totalDelta = 2.34;
+  const totalValue = portfolioMeta.totalValue ||
+    holdings.reduce((s, h) => s + (prices[h.sym] ?? 0) * h.qty, 0);
+  const totalDelta = portfolioMeta.change24hPct;
 
   const pageTitle = PAGE_TITLES[pathname] ?? "Cryptolio";
 

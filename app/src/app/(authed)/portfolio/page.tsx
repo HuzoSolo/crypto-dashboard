@@ -12,7 +12,13 @@ import { fmtPrice } from "@/lib/fmt";
 export default function PortfolioPage() {
   const prices = useStore((s) => s.prices);
   const holdings = useStore((s) => s.holdings);
-  const setHoldings = useStore((s) => s.setHoldings);
+  const portfolioLoading = useStore((s) => s.portfolioLoading);
+  const updateHolding = useStore((s) => s.updateHolding);
+  const removeHolding = useStore((s) => s.removeHolding);
+  const addHolding = useStore((s) => s.addHolding);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newSym, setNewSym] = useState("");
+  const [newAmt, setNewAmt] = useState("");
 
   const positions = holdings.map((h) => ({
     ...h,
@@ -40,7 +46,7 @@ export default function PortfolioPage() {
       <div className="flex items-baseline gap-[12px] mb-[4px]">
         <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", margin: 0 }}>Cüzdan</h1>
         <span style={{ color: "var(--text-mute)", fontSize: 13 }}>
-          {positions.length} pozisyon · maliyet ${totalCost.toFixed(0)}
+          {portfolioLoading ? "Yükleniyor…" : `${positions.length} pozisyon · maliyet $${totalCost.toFixed(0)}`}
         </span>
       </div>
 
@@ -141,11 +147,10 @@ export default function PortfolioPage() {
                 <input
                   className="mono"
                   value={p.qty}
-                  onChange={(e) =>
-                    setHoldings((arr) =>
-                      arr.map((h) => (h.sym === p.sym ? { ...h, qty: parseFloat(e.target.value) || 0 } : h))
-                    )
-                  }
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val) && val > 0) updateHolding(p.id, val);
+                  }}
                   style={{
                     width: "100%",
                     marginTop: 2,

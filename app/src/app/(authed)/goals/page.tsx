@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Pencil, Trash2, Target, AlertTriangle, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Trash2, Target, AlertTriangle, X } from "lucide-react";
 import { useStore } from "@/lib/store";
 
 const NOW = new Date("2026-05-05");
@@ -17,7 +17,15 @@ function onTrack(g: { current: number; target: number; deadline: string }) {
 
 export default function GoalsPage() {
   const goals = useStore((s) => s.goals);
+  const goalsLoading = useStore((s) => s.goalsLoading);
+  const fetchGoals = useStore((s) => s.fetchGoals);
+  const addGoal = useStore((s) => s.addGoal);
+  const deleteGoal = useStore((s) => s.deleteGoal);
   const [showNew, setShowNew] = useState(false);
+  const [newGoal, setNewGoal] = useState({ name: "", targetUSD: "", deadline: "" });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { fetchGoals(); }, []);
 
   const atRisk = goals.filter((g) => !onTrack(g)).length;
 
@@ -26,7 +34,7 @@ export default function GoalsPage() {
       <div className="flex items-baseline gap-[12px] mb-[4px]">
         <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", margin: 0 }}>Hedefler</h1>
         <span style={{ color: "var(--text-mute)", fontSize: 13 }}>
-          {goals.length} aktif hedef · {atRisk} risk altında
+          {goalsLoading ? "Yükleniyor…" : `${goals.length} aktif hedef · ${atRisk} risk altında`}
         </span>
       </div>
 
@@ -136,10 +144,10 @@ export default function GoalsPage() {
                   <div className="mono" style={{ marginTop: 2, fontWeight: 500 }}>${(g.target - g.current).toLocaleString()}</div>
                 </div>
                 <div className="flex gap-[4px]">
-                  <button style={{ display: "grid", placeItems: "center", width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer" }}>
-                    <Pencil size={13} />
-                  </button>
-                  <button style={{ display: "grid", placeItems: "center", width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--loss)", cursor: "pointer" }}>
+                  <button
+                    onClick={() => deleteGoal(g.id)}
+                    style={{ display: "grid", placeItems: "center", width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--loss)", cursor: "pointer" }}
+                  >
                     <Trash2 size={13} />
                   </button>
                 </div>
@@ -170,29 +178,51 @@ export default function GoalsPage() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 }}>
               <label style={{ fontSize: 11, color: "var(--text-mute)", fontWeight: 500 }}>Hedef adı</label>
-              <input style={{ width: "100%", padding: "7px 10px", background: "var(--bg-card)", border: "1px solid var(--border-soft)", borderRadius: 8, color: "var(--text)", fontSize: 13, outline: "none", fontFamily: "inherit" }} placeholder="Örn: 2026 Yıl Sonu Kâr" />
+              <input
+                value={newGoal.name}
+                onChange={(e) => setNewGoal({ ...newGoal, name: e.target.value })}
+                style={{ width: "100%", padding: "7px 10px", background: "var(--bg-card)", border: "1px solid var(--border-soft)", borderRadius: 8, color: "var(--text)", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                placeholder="Örn: 2026 Yıl Sonu Kâr"
+              />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <label style={{ fontSize: 11, color: "var(--text-mute)", fontWeight: 500 }}>Hedef miktar (USD)</label>
-                <input className="mono" style={{ width: "100%", padding: "7px 10px", background: "var(--bg-card)", border: "1px solid var(--border-soft)", borderRadius: 8, color: "var(--text)", fontSize: 13, outline: "none", fontFamily: "inherit" }} placeholder="10000" />
+                <input
+                  className="mono"
+                  type="number"
+                  value={newGoal.targetUSD}
+                  onChange={(e) => setNewGoal({ ...newGoal, targetUSD: e.target.value })}
+                  style={{ width: "100%", padding: "7px 10px", background: "var(--bg-card)", border: "1px solid var(--border-soft)", borderRadius: 8, color: "var(--text)", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                  placeholder="10000"
+                />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <label style={{ fontSize: 11, color: "var(--text-mute)", fontWeight: 500 }}>Son tarih</label>
-                <input type="date" defaultValue="2026-12-31" style={{ width: "100%", padding: "7px 10px", background: "var(--bg-card)", border: "1px solid var(--border-soft)", borderRadius: 8, color: "var(--text)", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
-              </div>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 11, color: "var(--text-mute)", fontWeight: 500, display: "block", marginBottom: 4 }}>Öncelik</label>
-              <div className="flex gap-[8px]">
-                {["Yüksek", "Orta", "Düşük"].map((p) => (
-                  <button key={p} style={{ flex: 1, padding: "5px 10px", borderRadius: 999, border: "1px solid var(--border-soft)", background: "var(--bg-card)", color: "var(--text-dim)", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{p}</button>
-                ))}
+                <input
+                  type="date"
+                  value={newGoal.deadline}
+                  onChange={(e) => setNewGoal({ ...newGoal, deadline: e.target.value })}
+                  style={{ width: "100%", padding: "7px 10px", background: "var(--bg-card)", border: "1px solid var(--border-soft)", borderRadius: 8, color: "var(--text)", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                />
               </div>
             </div>
             <div className="flex gap-[8px]">
               <button onClick={() => setShowNew(false)} style={{ flex: 1, padding: "9px", borderRadius: 8, border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text)", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>İptal</button>
-              <button onClick={() => setShowNew(false)} style={{ flex: 1, padding: "9px", borderRadius: 8, border: "1px solid var(--accent-color)", background: "var(--accent-color)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Hedef Oluştur</button>
+              <button
+                disabled={saving || !newGoal.name || !newGoal.targetUSD || !newGoal.deadline}
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    await addGoal({ name: newGoal.name, targetUSD: parseFloat(newGoal.targetUSD), deadline: new Date(newGoal.deadline).toISOString() });
+                    setNewGoal({ name: "", targetUSD: "", deadline: "" });
+                    setShowNew(false);
+                  } finally { setSaving(false); }
+                }}
+                style={{ flex: 1, padding: "9px", borderRadius: 8, border: "1px solid var(--accent-color)", background: "var(--accent-color)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.7 : 1 }}
+              >
+                {saving ? "Kaydediliyor…" : "Hedef Oluştur"}
+              </button>
             </div>
           </div>
         </div>
